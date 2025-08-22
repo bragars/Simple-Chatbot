@@ -19,7 +19,8 @@ sys.path.append(parent_dir)
 from database import db
 
 names = ['luke skywalker','c-3po','darth vader','owen lars','beru whitesun lars','r5-d4','biggs darklighter','anakin skywalker','shmi skywalker','cliegg lars','r2-d2','palpatine','padmé amidala','jar jar binks','roos tarpals','rugor nass','ric olié','quarsh panaka','gregar typho', 'cordé']
-not_nouns = ['specie', 'height', 'vehicles', 'starships', 'planet', 'planets', 'day', 'population', 'father']
+not_nouns = ['mass', 'specie', 'height', 'vehicles', 'starships', 'planet', 'planets', 'day', 'population', 'father']
+common_tags = ['greetings', 'movies', 'goodbye', 'thanks', 'weather', 'help', 'time', 'funny', 'food']
 
 lemmatizer = WordNetLemmatizer()
 
@@ -49,36 +50,31 @@ def find_similar_name(name):
     for n in names:
       if n.lower() in name.lower():
         return n
-
   return name
 
 def not_found_handle():
-  return "apologies", " "
+  return "greetings", " "
 
 def category_not_determined():
   return "apologies", " "
 
-def classify_noun(noun):
+def classify_noun(noun, intents):
   similar_name = find_similar_name(noun).lower()
-  print("similar name", similar_name)
-  rgx = re.compile(f'{similar_name}', re.IGNORECASE)
-  people = db.peoples.find_one({"name": rgx})
-  if people:
-    return "peoples", similar_name
+  if not similar_name:
+    return None, None
+
+  rgx = re.compile(f'^{re.escape(similar_name)}$', re.IGNORECASE)
+  categories_to_check = ["peoples", "species", "vehicles", "planets", "films", "starships"]
+
+  for category in categories_to_check:
+    collection = db[category]
+    if collection.find_one({"name": rgx}):
+      return category, similar_name  # Retorna assim que encontrar a primeira correspondência
   
-  species = db.species.find_one({"name": similar_name})
-  if species:
-    return "species", similar_name
+  category = intents[0]['intent']
+  return category, similar_name  # Retorna assim que encontrar a primeira correspondência
 
-  vehicles = db.vehicles.find_one({"name": similar_name})
-  if vehicles:
-    return "vehicles", similar_name
-
-  planets = db.planets.find_one({"name": similar_name})
-  if planets:
-    return "planets", similar_name
-
-  return None, None
+  # return None, None
 
 def bag_of_words(sentence):
   sentence_words = clean_up_sentence(sentence)
@@ -104,54 +100,58 @@ def predict_class(sentence):
   return return_list
 
 def get_response(intents_list, intents_json, message):
+  res = ""
   nltk_results = ne_chunk(pos_tag(word_tokenize(message)))
   noun = extract_noun(nltk_results)
 
   if isinstance(noun, list):
     result_noun = noun = " ".join(noun)
-    category, similar_name = classify_noun(result_noun)
+    category, similar_name = classify_noun(result_noun, intents_list)
     rgx = re.compile(f'{similar_name}', re.IGNORECASE) 
     query = { "name": rgx }
   else:
-    category = classify_noun(noun.lower())
+    category = classify_noun(noun.lower(), intents_list)
     rgx = re.compile(f'{noun.lower()}', re.IGNORECASE) 
     query = { "name": rgx }
-    
+
   tag = intents_list[0]['intent']
-  
+
   if category:
-    collection = db[category]
-    query_res = collection.find_one(query)
-    
-    if tag in [ 'vehicles', 'starships', 'films', 'species', 'residents']:
-      sub_res = []
-      if tag == 'residents':
-        sub_collection = db['peoples']
-      else:
-        sub_collection = db[tag]
-        
-      ar = query_res[tag]
+      collection = db[category]
+      query_res = collection.find_one(query)
 
-      for a in ar:
-        sub_query = { "url": a }
-        if tag in 'films':
-          sub_res.append(sub_collection.find_one(sub_query)["title"])
+      
+      if tag in [ 'vehicles', 'starships', 'films', 'species', 'residents']:
+        sub_res = []
+        if tag == 'residents':
+          sub_collection = db['peoples']
         else:
-          sub_res.append(sub_collection.find_one(sub_query)["name"])
-      res = sub_res
+          sub_collection = db[tag]
+          
+        ar = query_res[tag]
 
-      if len(sub_res) == 0:
-        tag, res = not_found_handle()
+        for a in ar:
+          sub_query = { "url": a }
+          if tag in 'films':
+            sub_res.append(sub_collection.find_one(sub_query)["title"])
+          else:
+            sub_res.append(sub_collection.find_one(sub_query)["name"])
 
-    elif tag in [ 'homeworld' ]:
+        res = sub_res
+
+        if len(sub_res) == 0:
+          tag, res = not_found_handle()
+
+      elif tag in [ 'homeworld' ]:
         sub_collection = db['planets']
         sub_query = { "url": query_res[tag] }
         sub_res = sub_collection.find_one(sub_query)["name"]
         res = sub_res
 
-    else:
-      if tag in query_res:
-        res = query_res[tag]
+      else:
+        if query_res and tag in query_res:
+          res = query_res[tag]
+        # else
   else:
     tag, res = not_found_handle()
   
@@ -159,6 +159,10 @@ def get_response(intents_list, intents_json, message):
   #   tag, res = category_not_determined()
 
   list_of_intents = intents_json['intents']
+
+  # if not res:
+  #   return "error res"
+
   result = find_result(tag, res, list_of_intents, noun)
 
   return result
@@ -170,12 +174,10 @@ def extract_noun(nltk_results):
     if isinstance(nltk_result, Tree):
       name = ' '.join([nltk_result_leaf[0] for nltk_result_leaf in nltk_result.leaves()])
       nouns.append(name)
-      print('Type:', nltk_result.label(), 'Name:', name)
     elif isinstance(nltk_result, tuple) and nltk_result[1].startswith('NN'):
       noun = nltk_result[0]
       if noun.lower() not in not_nouns:
         nouns.append(noun)
-        print('Noun:', noun)
   return nouns
 
 def find_result(tag, res, list_of_intents, character):
@@ -189,21 +191,21 @@ def find_result(tag, res, list_of_intents, character):
           res = ", ".join(res)
           result = random.choice(intent['responses']['multiple'])
       else:
-        result = random.choice(intent['responses']['singular'])
+        if tag in common_tags:
+          result = random.choice(intent['responses'])
+        else:
+          result = random.choice(intent['responses']['singular'])
+
       result = result.replace("{name}", character)
       result = result.replace("{response}", res)
   return result
 
 if __name__ == '__main__':
-  print('GO, BOT IS RUNNING')
   counter = 0
   max_iterations = 2
 
   while counter < max_iterations:
     message = input('')
     ints = predict_class(message)
-    print('message', message)
-    print('ints', ints)
     res = get_response(ints, intents, message)
-    print(res)
     counter += 1

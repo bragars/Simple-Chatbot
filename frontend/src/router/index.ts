@@ -35,7 +35,7 @@ export default route(function (/* { store, ssrContext } */) {
   });
 
   Router.beforeEach(async (to) => {
-    const publicPages = ['/login'];
+    const publicPages = ['/login', '/'];
     const authRequired = !publicPages.includes(to.path);
     let auth = false;
     if(Cookies.has('user_info')){

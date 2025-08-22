@@ -1,15 +1,10 @@
-from flask import Blueprint, request
 import jwt
 import bcrypt
-import os
-from app import db
-from app import app
-from flask import current_app
+from flask import Blueprint, request, current_app
 from bson.objectid import ObjectId
-
+from database import db
 
 auth = Blueprint('auth', __name__, url_prefix="/auth")
-
 users = db.users
 
 @auth.route('/validate', methods=['GET'])
@@ -57,18 +52,16 @@ def login():
     }, 400
   password = content['password'].encode('utf-8')
   user = users.find_one({"user":content['user']})
-  print(user)
   hashed = bcrypt.hashpw(password, user['salt'])
+  
   if(not user['password'] == hashed):
     return {"message": "Username or password invalid"},403
   try:
     user["token"] = jwt.encode(
       {"user_id": str(user["_id"])},
-      app.config["SECRET_KEY"],
+      # app.config["SECRET_KEY"],
       algorithm="HS256"
     )
-    print(user['token'])
-    print(user['nickname'])
     return {
       "message": "Successfully fetched auth token",
       "data": {"token": user["token"], "nickname": user["nickname"]}
@@ -103,4 +96,3 @@ def register():
       "data": None,
       "error": str(e)
     }, 500
-

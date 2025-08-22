@@ -1,14 +1,12 @@
-// const axios = require('axios')
 import axios from "axios";
-import { forEach } from "lodash";
 import { Schema, model, connect } from "mongoose"
-// import _, { toPlainObject } from 'lodash'
 
-const dbUrl = "mongodb+srv://admin:admin@paa-chatbot.tp4urq2.mongodb.net/flask_db"
+const uri = ENV.DATABASE_URL
+const dbUrl = uri
 
 await connect(dbUrl)
 
-const base = "https://swapi.dev/api/"
+const base = "https://swapi.bry.com.br/api/"
 
 type people_api = {
     films: Array<string>
@@ -484,12 +482,12 @@ async function getFromApi(url: string) {
 var entities = {
     // people: 82,
     // planets: 60,
-    starships: 36,
-    // films: 6,
+    // starships: 36,
+    films: 6,
     // species: 37,
     // vehicles: 39
 };
-  
+
 console.log("running")
 for (const [entity, size] of Object.entries(entities)) {
     for (let index = 1; index <= size; index++) {
