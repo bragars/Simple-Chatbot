@@ -1,8 +1,14 @@
 import axios from "axios";
 import { Schema, model, connect } from "mongoose"
+require('dotenv').config();
 
-const uri = ENV.DATABASE_URL
+const uri = process.env.DATABASE_URL
 const dbUrl = uri
+
+if (!dbUrl) {
+    console.error("FATAL ERROR: DATABASE_URL is not defined in the .env file.");
+    process.exit(1);
+}
 
 await connect(dbUrl)
 
@@ -480,12 +486,12 @@ async function getFromApi(url: string) {
 }
 
 var entities = {
-    // people: 82,
-    // planets: 60,
-    // starships: 36,
+    people: 82,
+    planets: 60,
+    starships: 36,
     films: 6,
-    // species: 37,
-    // vehicles: 39
+    species: 37,
+    vehicles: 39
 };
 
 console.log("running")

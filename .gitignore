@@ -10,6 +10,7 @@ scrapper/node_modules
 /node_modules/
 
 # frontEnd
+frontend/package-lock.json
 frontend/.DS_Store
 frontend/.thumbs.db
 frontend/node_modules
